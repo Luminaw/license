@@ -6,7 +6,9 @@ use std::fs;
 
 use anstyle::{AnsiColor, Color, Style};
 
-const HEADER: Style = Style::new().fg_color(Some(Color::Ansi(AnsiColor::BrightBlue))).bold();
+const HEADER: Style = Style::new()
+    .fg_color(Some(Color::Ansi(AnsiColor::BrightBlue)))
+    .bold();
 const SUCCESS: Style = Style::new().fg_color(Some(Color::Ansi(AnsiColor::BrightGreen)));
 const ERROR: Style = Style::new().fg_color(Some(Color::Ansi(AnsiColor::BrightRed)));
 const DIM: Style = Style::new().fg_color(Some(Color::Ansi(AnsiColor::BrightBlack)));
@@ -29,7 +31,7 @@ enum Commands {
     /// Add one or more licenses to your project.
     ///
     /// Example: license add mit apache-2.0
-    Add { 
+    Add {
         /// The SPDX identifier(s) of the license(s) to add (e.g., mit, apache-2.0).
         #[arg(required = true)]
         license_ids: Vec<String>,
@@ -54,7 +56,7 @@ enum Commands {
     ///
     /// Special key: "path" - shows the location of the config file.
     /// Supported keys: name, author_name, email, author_email.
-    Config { 
+    Config {
         /// The config key to get or set.
         key: Option<String>,
         /// The value to assign to the key.
@@ -75,7 +77,11 @@ enum Commands {
 fn get_project_description(project_name: &str) -> String {
     if let Ok(content) = fs::read_to_string("Cargo.toml") {
         if let Ok(value) = content.parse::<toml::Value>() {
-            if let Some(desc) = value.get("package").and_then(|p| p.get("description")).and_then(|d| d.as_str()) {
+            if let Some(desc) = value
+                .get("package")
+                .and_then(|p| p.get("description"))
+                .and_then(|d| d.as_str())
+            {
                 return desc.to_string();
             }
         }
@@ -116,13 +122,16 @@ fn main() {
     let mut cfg: Config = confy::load("license-manager", None).expect("Failed to load config");
 
     match args.command {
-        Commands::Add { license_ids, force, year, name } => {
+        Commands::Add {
+            license_ids,
+            force,
+            year,
+            name,
+        } => {
             let year = year.unwrap_or_else(|| chrono::Local::now().format("%Y").to_string());
-            let author = name.unwrap_or_else(|| {
-                match &cfg.author_email {
-                    Some(email) if !email.is_empty() => format!("{} <{}>", cfg.author_name, email),
-                    _ => cfg.author_name.clone(),
-                }
+            let author = name.unwrap_or_else(|| match &cfg.author_email {
+                Some(email) if !email.is_empty() => format!("{} <{}>", cfg.author_name, email),
+                _ => cfg.author_name.clone(),
             });
 
             let current_dir = std::env::current_dir().ok();
@@ -131,19 +140,21 @@ fn main() {
                 .and_then(|p| p.file_name())
                 .and_then(|s| s.to_str())
                 .unwrap_or("project");
-            
+
             let description = get_project_description(project_name);
 
             for id in &license_ids {
                 if let Some(license) = find_license(id) {
                     let mut text = license.text().to_string();
-                    
-                    text = text.replace("<year>", &year)
+
+                    text = text
+                        .replace("<year>", &year)
                         .replace("[year]", &year)
                         .replace("[yyyy]", &year)
                         .replace("{year}", &year);
-                    
-                    text = text.replace("<copyright holders>", &author)
+
+                    text = text
+                        .replace("<copyright holders>", &author)
                         .replace("[name of copyright owner]", &author)
                         .replace("<name of copyright owner>", &author)
                         .replace("<name of author>", &author)
@@ -162,63 +173,70 @@ fn main() {
                     };
 
                     if fs::metadata(&filename).is_ok() && !force {
-                        println!("{}File {} already exists. Use --force to overwrite.{}", ERROR, filename, RESET);
+                        println!(
+                            "{}File {} already exists. Use --force to overwrite.{}",
+                            ERROR, filename, RESET
+                        );
                         continue;
                     }
 
                     fs::write(&filename, text).expect("Failed to write license file");
                     println!("{}Successfully created {}{}", SUCCESS, filename, RESET);
                 } else {
-                    eprintln!("{}Error: License identifier '{}' not found in SPDX list.{}", ERROR, id, RESET);
+                    eprintln!(
+                        "{}Error: License identifier '{}' not found in SPDX list.{}",
+                        ERROR, id, RESET
+                    );
                 }
             }
         }
-        Commands::Config { key, value } => {
-            match (key.as_deref(), value) {
-                (None, _) => {
-                    println!("{HEADER}Current Configuration:{RESET}");
-                    println!("{:#?}", cfg);
-                }
-                (Some("path"), _) => {
-                    let path = confy::get_configuration_file_path("license-manager", None).expect("Failed to get config path");
-                    println!("{HEADER}Config file location:{RESET}");
-                    println!("{}", path.display());
-                }
-                (Some("name"), None) | (Some("author_name"), None) => {
-                    println!("{}", cfg.author_name);
-                }
-                (Some("name"), Some(v)) | (Some("author_name"), Some(v)) => {
-                    cfg.author_name = v;
-                    confy::store("license-manager", None, &cfg).expect("Failed to store config");
-                    println!("{}Updated author_name{}", SUCCESS, RESET);
-                }
-                (Some("email"), None) | (Some("author_email"), None) => {
-                    println!("{}", cfg.author_email.as_deref().unwrap_or("Not set"));
-                }
-                (Some("email"), Some(v)) | (Some("author_email"), Some(v)) => {
-                    cfg.author_email = Some(v);
-                    confy::store("license-manager", None, &cfg).expect("Failed to store config");
-                    println!("{}Updated author_email{}", SUCCESS, RESET);
-                }
-                (Some(k), _) => {
-                    eprintln!("{}Unknown config key: {}{}", ERROR, k, RESET);
-                    std::process::exit(1);
-                }
+        Commands::Config { key, value } => match (key.as_deref(), value) {
+            (None, _) => {
+                println!("{HEADER}Current Configuration:{RESET}");
+                println!("{:#?}", cfg);
             }
-        }
+            (Some("path"), _) => {
+                let path = confy::get_configuration_file_path("license-manager", None)
+                    .expect("Failed to get config path");
+                println!("{HEADER}Config file location:{RESET}");
+                println!("{}", path.display());
+            }
+            (Some("name"), None) | (Some("author_name"), None) => {
+                println!("{}", cfg.author_name);
+            }
+            (Some("name"), Some(v)) | (Some("author_name"), Some(v)) => {
+                cfg.author_name = v;
+                confy::store("license-manager", None, &cfg).expect("Failed to store config");
+                println!("{}Updated author_name{}", SUCCESS, RESET);
+            }
+            (Some("email"), None) | (Some("author_email"), None) => {
+                println!("{}", cfg.author_email.as_deref().unwrap_or("Not set"));
+            }
+            (Some("email"), Some(v)) | (Some("author_email"), Some(v)) => {
+                cfg.author_email = Some(v);
+                confy::store("license-manager", None, &cfg).expect("Failed to store config");
+                println!("{}Updated author_email{}", SUCCESS, RESET);
+            }
+            (Some(k), _) => {
+                eprintln!("{}Unknown config key: {}{}", ERROR, k, RESET);
+                std::process::exit(1);
+            }
+        },
         Commands::List { query } => {
             let query = query.map(|q| q.to_lowercase());
-            
+
             println!("{}{:<20} | {:<50}{}", HEADER, "ID", "Full Name", RESET);
             println!("{DIM}{:-<20}-|-{:-<50}{}", "", "", RESET);
-            
+
             let mut licenses: Vec<_> = spdx::identifiers::LICENSES.iter().collect();
             licenses.sort_by_key(|l| l.name);
 
             for license in licenses {
                 let matches = match &query {
-                    Some(q) => license.name.to_lowercase().contains(q) || 
-                              license.full_name.to_lowercase().contains(q),
+                    Some(q) => {
+                        license.name.to_lowercase().contains(q)
+                            || license.full_name.to_lowercase().contains(q)
+                    }
                     None => true,
                 };
 
@@ -231,18 +249,33 @@ fn main() {
             if let Some(license) = find_license(&id) {
                 println!("{HEADER}ID:{RESET}          {}", license.name);
                 println!("{HEADER}Full Name:{RESET}   {}", license.full_name);
-                println!("{HEADER}OSI Approved:{RESET} {}", if license.is_osi_approved() { "Yes" } else { "No" });
-                
+                println!(
+                    "{HEADER}OSI Approved:{RESET} {}",
+                    if license.is_osi_approved() {
+                        "Yes"
+                    } else {
+                        "No"
+                    }
+                );
+
                 println!("\n{HEADER}License Text Preview:{RESET}");
                 println!("{DIM}--------------------------------------------------{RESET}");
-                let preview: String = license.text().lines().take(15).collect::<Vec<_>>().join("\n");
+                let preview: String = license
+                    .text()
+                    .lines()
+                    .take(15)
+                    .collect::<Vec<_>>()
+                    .join("\n");
                 println!("{}", preview);
                 if license.text().lines().count() > 15 {
                     println!("{DIM}... (use 'add' to generate full file) ...{RESET}");
                 }
                 println!("{DIM}--------------------------------------------------{RESET}");
             } else {
-                eprintln!("{}Error: License identifier '{}' not found.{}", ERROR, id, RESET);
+                eprintln!(
+                    "{}Error: License identifier '{}' not found.{}",
+                    ERROR, id, RESET
+                );
             }
         }
     }
