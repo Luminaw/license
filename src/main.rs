@@ -75,16 +75,14 @@ enum Commands {
 }
 
 fn get_project_description(project_name: &str) -> String {
-    if let Ok(content) = fs::read_to_string("Cargo.toml") {
-        if let Ok(value) = content.parse::<toml::Value>() {
-            if let Some(desc) = value
-                .get("package")
-                .and_then(|p| p.get("description"))
-                .and_then(|d| d.as_str())
-            {
-                return desc.to_string();
-            }
-        }
+    if let Ok(content) = fs::read_to_string("Cargo.toml")
+        && let Ok(value) = content.parse::<toml::Value>()
+        && let Some(desc) = value
+            .get("package")
+            .and_then(|p| p.get("description"))
+            .and_then(|d| d.as_str())
+    {
+        return desc.to_string();
     }
     format!("{}: A new project.", project_name)
 }
