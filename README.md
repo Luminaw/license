@@ -9,10 +9,23 @@ A fast and simple license manager for your projects, written in Rust.
 
 - **Quick Add**: Add licenses (MIT, Apache-2.0, etc.) to your project with a single command.
 - **Auto-Fill**: Automatically fills in the current year, author name, and project description.
+- **Smart Autodetection**: Automatically detects project metadata from Rust, Node.js, Python, PHP, C#, Java, and Flutter projects.
 - **SPDX Integration**: Uses the official SPDX license list for accurate and up-to-date license texts.
 - **Configuration**: Save your author name and email to avoid re-typing them.
 - **Searchable**: List and filter hundreds of available licenses.
 - **Info Preview**: View license details and OSI compliance status before adding.
+
+## Supported Project Types
+
+The tool automatically detects the project name, description, and author from the following files:
+- **Rust**: `Cargo.toml`
+- **Node.js**: `package.json`
+- **PHP**: `composer.json`
+- **Python**: `pyproject.toml`
+- **Dart / Flutter**: `pubspec.yaml`
+- **C# / .NET**: `*.csproj`
+- **Java / Maven**: `pom.xml`
+- **Fallback**: `README.md` (detects name and first paragraph)
 
 ## Installation
 

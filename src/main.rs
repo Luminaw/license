@@ -1,4 +1,5 @@
 mod config;
+mod project;
 
 use anyhow::Context;
 use clap::{Parser, Subcommand};
@@ -75,19 +76,6 @@ enum Commands {
     },
 }
 
-fn get_project_description(project_name: &str) -> String {
-    if let Ok(content) = fs::read_to_string("Cargo.toml")
-        && let Ok(value) = content.parse::<toml::Value>()
-        && let Some(desc) = value
-            .get("package")
-            .and_then(|p| p.get("description"))
-            .and_then(|d| d.as_str())
-    {
-        return desc.to_string();
-    }
-    format!("{}: A new project.", project_name)
-}
-
 fn find_license(id: &str) -> Option<spdx::LicenseId> {
     // Try exact match first
     if let Some(license) = spdx::license_id(id) {
@@ -128,19 +116,23 @@ fn main() -> anyhow::Result<()> {
             name,
         } => {
             let year = year.unwrap_or_else(|| chrono::Local::now().format("%Y").to_string());
-            let author = name.unwrap_or_else(|| match &cfg.author_email {
-                Some(email) if !email.is_empty() => format!("{} <{}>", cfg.author_name, email),
-                _ => cfg.author_name.clone(),
+            let project_info = project::detect();
+
+            let author = name.unwrap_or_else(|| {
+                // Priority: 1. Config file, 2. Project metadata, 3. Default config value
+                if cfg.author_name != "Your Name" {
+                    match &cfg.author_email {
+                        Some(email) if !email.is_empty() => {
+                            format!("{} <{}>", cfg.author_name, email)
+                        }
+                        _ => cfg.author_name.clone(),
+                    }
+                } else if let Some(proj_author) = &project_info.author {
+                    proj_author.clone()
+                } else {
+                    cfg.author_name.clone()
+                }
             });
-
-            let current_dir = std::env::current_dir().ok();
-            let project_name = current_dir
-                .as_ref()
-                .and_then(|p| p.file_name())
-                .and_then(|s| s.to_str())
-                .unwrap_or("project");
-
-            let description = get_project_description(project_name);
 
             for id in &license_ids {
                 if let Some(license) = find_license(id) {
@@ -161,9 +153,9 @@ fn main() -> anyhow::Result<()> {
                         .replace("[owner]", &author)
                         .replace("{owner}", &author);
 
-                    text = text.replace("<program>", project_name)
-                        .replace("[program]", project_name)
-                        .replace("<one line to give the program's name and a brief idea of what it does.>", &description);
+                    text = text.replace("<program>", &project_info.name)
+                        .replace("[program]", &project_info.name)
+                        .replace("<one line to give the program's name and a brief idea of what it does.>", &project_info.description);
 
                     let filename = if license_ids.len() == 1 {
                         "LICENSE".to_string()
