@@ -186,7 +186,22 @@ pub fn detect_in(root: &Path) -> ProjectInfo {
         return info;
     }
 
-    // 8. Fallback: README.md
+    // 8. Go (go.mod)
+    if let Ok(content) = fs::read_to_string(root.join("go.mod")) {
+        for line in content.lines() {
+            if let Some(stripped) = line.trim().strip_prefix("module ") {
+                let module_path = stripped.trim();
+                info.name = module_path
+                    .split('/')
+                    .last()
+                    .unwrap_or(module_path)
+                    .to_string();
+                return info;
+            }
+        }
+    }
+
+    // 9. Fallback: README.md
     if let Ok(content) = fs::read_to_string(root.join("README.md")) {
         for line in content.lines() {
             let trimmed = line.trim();
@@ -335,6 +350,16 @@ mod tests {
         let info = detect_in(dir.path());
         assert_eq!(info.name, "test-java");
         assert_eq!(info.description, "A java test project");
+    }
+
+    #[test]
+    fn test_go_detection() {
+        let dir = tempdir().unwrap();
+        let go_mod = "module github.com/luminaw/test-go\n\ngo 1.21";
+        fs::write(dir.path().join("go.mod"), go_mod).unwrap();
+
+        let info = detect_in(dir.path());
+        assert_eq!(info.name, "test-go");
     }
 
     #[test]
