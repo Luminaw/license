@@ -27,6 +27,10 @@ const RESET: Style = Style::new();
 struct Cli {
     #[command(subcommand)]
     command: Commands,
+
+    /// Show all licenses, even if not OSI approved.
+    #[arg(long, global = true)]
+    ignore_osi_approved: bool,
 }
 
 #[derive(Subcommand)]
@@ -140,6 +144,8 @@ fn main() -> anyhow::Result<()> {
 
     let mut cfg: Config = confy::load("license-manager", None).context("Failed to load config")?;
 
+    let osi_only = cfg.osi_approved_only && !args.ignore_osi_approved;
+
     match args.command {
         Commands::Add {
             license_ids,
@@ -167,8 +173,22 @@ fn main() -> anyhow::Result<()> {
 
             for id in &license_ids {
                 let (text, name_to_use) = if let Some(custom_text) = get_custom_template(id) {
+                    if osi_only {
+                        eprintln!(
+                            "{}Error: License identifier '{}' is a custom template, but osi_approved_only is enabled.{}",
+                            ERROR, id, RESET
+                        );
+                        continue;
+                    }
                     (custom_text, id.to_string())
                 } else if let Some(license) = find_license(id) {
+                    if osi_only && !license.is_osi_approved() {
+                        eprintln!(
+                            "{}Error: License identifier '{}' is not OSI approved.{}",
+                            ERROR, id, RESET
+                        );
+                        continue;
+                    }
                     (license.text().to_string(), license.name.to_string())
                 } else {
                     eprintln!(
@@ -247,6 +267,11 @@ fn main() -> anyhow::Result<()> {
                 confy::store("license-manager", None, &cfg).context("Failed to store config")?;
                 println!("{}Updated author_email{}", SUCCESS, RESET);
             }
+            (Some("osi_approved_only"), Some(v)) => {
+                cfg.osi_approved_only = v.parse().context("Value must be 'true' or 'false'")?;
+                confy::store("license-manager", None, &cfg).context("Failed to store config")?;
+                println!("{}Updated osi_approved_only to {}{}", SUCCESS, cfg.osi_approved_only, RESET);
+            }
             (Some(k), _) => {
                 anyhow::bail!("{}Unknown config key: {}{}", ERROR, k, RESET);
             }
@@ -261,7 +286,8 @@ fn main() -> anyhow::Result<()> {
             licenses.sort_by_key(|l| l.name);
 
             // Custom templates
-            if let Ok(templates_dir) = get_templates_dir()
+            if !osi_only
+                && let Ok(templates_dir) = get_templates_dir()
                 && let Ok(entries) = fs::read_dir(templates_dir)
             {
                 for entry in entries.flatten() {
@@ -278,6 +304,14 @@ fn main() -> anyhow::Result<()> {
             }
 
             for license in licenses {
+                if osi_only
+                    && !find_license(license.name)
+                        .map(|id| id.is_osi_approved())
+                        .unwrap_or(false)
+                {
+                    continue;
+                }
+
                 let matches = match &query {
                     Some(q) => {
                         license.name.to_lowercase().contains(q)
@@ -293,6 +327,13 @@ fn main() -> anyhow::Result<()> {
         }
         Commands::Info { id } => {
             if let Some(custom_text) = get_custom_template(&id) {
+                if osi_only {
+                    eprintln!(
+                        "{}Error: License identifier '{}' is a custom template, but osi_approved_only is enabled.{}",
+                        ERROR, id, RESET
+                    );
+                    return Ok(());
+                }
                 println!("{HEADER}ID:{RESET}          {}", id);
                 println!("{HEADER}Type:{RESET}        Custom Template");
 
@@ -305,6 +346,13 @@ fn main() -> anyhow::Result<()> {
                 }
                 println!("{DIM}--------------------------------------------------{RESET}");
             } else if let Some(license) = find_license(&id) {
+                if osi_only && !license.is_osi_approved() {
+                    eprintln!(
+                        "{}Error: License identifier '{}' is not OSI approved.{}",
+                        ERROR, id, RESET
+                    );
+                    return Ok(());
+                }
                 println!("{HEADER}ID:{RESET}          {}", license.name);
                 println!("{HEADER}Full Name:{RESET}   {}", license.full_name);
                 println!(

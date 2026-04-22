@@ -10,6 +10,7 @@ A fast and simple license manager for your projects, written in Rust.
 - **Quick Add**: Add licenses (MIT, Apache-2.0, etc.) to your project with a single command.
 - **Auto-Fill**: Automatically fills in the current year, author name, and project description.
 - **Smart Autodetection**: Automatically detects project metadata from Rust, Node.js, Python, PHP, C#, Java, and Flutter projects.
+- **OSI Safety**: Filter for OSI-approved licenses by default to ensure legal compliance.
 - **SPDX Integration**: Uses the official SPDX license list for accurate and up-to-date license texts.
 - **Configuration**: Save your author name and email to avoid re-typing them.
 - **Searchable**: List and filter hundreds of available licenses.
@@ -101,6 +102,18 @@ View detailed information:
 
 ```bash
 license info mit
+```
+
+### OSI Approval Filter
+
+By default, the tool only shows and allows OSI-approved licenses and ignores custom templates. This is a safety feature to ensure you use legally recognized licenses.
+
+- **Bypass for one command**: Use the `--ignore-osi-approved` flag.
+- **Change default behavior**: `license config osi_approved_only false`.
+
+```bash
+# Search all licenses including non-OSI ones
+license list --ignore-osi-approved
 ```
 
 ### Custom Templates
