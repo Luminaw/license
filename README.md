@@ -27,6 +27,7 @@ The tool automatically detects the project name, description, and author from th
 - **Dart / Flutter**: `pubspec.yaml`
 - **C# / .NET**: `*.csproj`
 - **Java / Maven**: `pom.xml`
+- **Go**: `go.mod`
 - **Fallback**: `README.md` (detects name and first paragraph)
 
 ## Installation
