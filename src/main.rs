@@ -24,8 +24,14 @@ const RESET: Style = Style::new();
 #[command(
     name = "license",
     about = "A fast and simple license manager for your projects.",
-    version,
-    author
+    author,
+    version = concat!(
+        env!("CARGO_PKG_VERSION"),
+        "\nCopyright (C) 2026 Luminaw\n",
+        "This program comes with ABSOLUTELY NO WARRANTY.\n",
+        "This is free software, and you are welcome to redistribute it\n",
+        "under certain conditions."
+    )
 )]
 struct Cli {
     #[command(subcommand)]
