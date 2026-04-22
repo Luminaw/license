@@ -142,9 +142,10 @@ fn get_custom_template(name: &str) -> Option<String> {
 fn main() -> anyhow::Result<()> {
     let args = Cli::parse();
 
-    let mut cfg: Config = confy::load("license-manager", None).context("Failed to load config")?;
+    let cfg: Config = confy::load("license-manager", None).context("Failed to load config")?;
+    let resolved_cfg = cfg.resolve();
 
-    let osi_only = cfg.osi_approved_only && !args.ignore_osi_approved;
+    let osi_only = resolved_cfg.osi_approved_only && !args.ignore_osi_approved;
 
     match args.command {
         Commands::Add {
@@ -157,17 +158,18 @@ fn main() -> anyhow::Result<()> {
             let project_info = project::detect();
 
             let author = name.unwrap_or_else(|| {
-                if cfg.author_name != "Your Name" {
-                    match &cfg.author_email {
+                // Priority: 1. Config file (resolved), 2. Project metadata, 3. Default config value
+                if resolved_cfg.author_name != "Your Name" {
+                    match &resolved_cfg.author_email {
                         Some(email) if !email.is_empty() => {
-                            format!("{} <{}>", cfg.author_name, email)
+                            format!("{} <{}>", resolved_cfg.author_name, email)
                         }
-                        _ => cfg.author_name.clone(),
+                        _ => resolved_cfg.author_name.clone(),
                     }
                 } else if let Some(proj_author) = &project_info.author {
                     proj_author.clone()
                 } else {
-                    cfg.author_name.clone()
+                    resolved_cfg.author_name.clone()
                 }
             });
 
@@ -240,42 +242,51 @@ fn main() -> anyhow::Result<()> {
                 println!("{}Successfully created {}{}", SUCCESS, filename, RESET);
             }
         }
-        Commands::Config { key, value } => match (key.as_deref(), value) {
-            (None, _) => {
-                println!("{HEADER}Current Configuration:{RESET}");
-                println!("{:#?}", cfg);
+        Commands::Config { key, value } => {
+            let mut cfg: Config =
+                confy::load("license-manager", None).context("Failed to load config")?;
+            match (key.as_deref(), value) {
+                (None, _) => {
+                    println!("{HEADER}Base Configuration:{RESET}");
+                    println!("{:#?}", cfg);
+                    println!("\n{HEADER}Resolved Configuration (current directory):{RESET}");
+                    let res = cfg.resolve();
+                    println!("author_name:       {}", res.author_name);
+                    println!("author_email:      {:?}", res.author_email);
+                    println!("osi_approved_only: {}", res.osi_approved_only);
+                }
+                (Some("path"), _) => {
+                    let path = confy::get_configuration_file_path("license-manager", None)
+                        .context("Failed to get config path")?;
+                    println!("{HEADER}Config file location:{RESET}");
+                    println!("{}", path.display());
+                }
+                (Some("name") | Some("author_name"), Some(v)) => {
+                    cfg.author_name = v;
+                    confy::store("license-manager", None, &cfg)
+                        .context("Failed to store config")?;
+                    println!("{}Updated author_name{}", SUCCESS, RESET);
+                }
+                (Some("email") | Some("author_email"), Some(v)) => {
+                    cfg.author_email = Some(v);
+                    confy::store("license-manager", None, &cfg)
+                        .context("Failed to store config")?;
+                    println!("{}Updated author_email{}", SUCCESS, RESET);
+                }
+                (Some("osi_approved_only"), Some(v)) => {
+                    cfg.osi_approved_only = v.parse().context("Value must be 'true' or 'false'")?;
+                    confy::store("license-manager", None, &cfg)
+                        .context("Failed to store config")?;
+                    println!(
+                        "{}Updated osi_approved_only to {}{}",
+                        SUCCESS, cfg.osi_approved_only, RESET
+                    );
+                }
+                (Some(k), _) => {
+                    anyhow::bail!("{}Unknown config key: {}{}", ERROR, k, RESET);
+                }
             }
-            (Some("path"), _) => {
-                let path = confy::get_configuration_file_path("license-manager", None)
-                    .context("Failed to get config path")?;
-                println!("{HEADER}Config file location:{RESET}");
-                println!("{}", path.display());
-            }
-            (Some("name"), None) | (Some("author_name"), None) => {
-                println!("{}", cfg.author_name);
-            }
-            (Some("name"), Some(v)) | (Some("author_name"), Some(v)) => {
-                cfg.author_name = v;
-                confy::store("license-manager", None, &cfg).context("Failed to store config")?;
-                println!("{}Updated author_name{}", SUCCESS, RESET);
-            }
-            (Some("email"), None) | (Some("author_email"), None) => {
-                println!("{}", cfg.author_email.as_deref().unwrap_or("Not set"));
-            }
-            (Some("email"), Some(v)) | (Some("author_email"), Some(v)) => {
-                cfg.author_email = Some(v);
-                confy::store("license-manager", None, &cfg).context("Failed to store config")?;
-                println!("{}Updated author_email{}", SUCCESS, RESET);
-            }
-            (Some("osi_approved_only"), Some(v)) => {
-                cfg.osi_approved_only = v.parse().context("Value must be 'true' or 'false'")?;
-                confy::store("license-manager", None, &cfg).context("Failed to store config")?;
-                println!("{}Updated osi_approved_only to {}{}", SUCCESS, cfg.osi_approved_only, RESET);
-            }
-            (Some(k), _) => {
-                anyhow::bail!("{}Unknown config key: {}{}", ERROR, k, RESET);
-            }
-        },
+        }
         Commands::List { query } => {
             let query = query.map(|q| q.to_lowercase());
 

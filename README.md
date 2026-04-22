@@ -10,6 +10,7 @@ A fast and simple license manager for your projects, written in Rust.
 - **Quick Add**: Add licenses (MIT, Apache-2.0, etc.) to your project with a single command.
 - **Auto-Fill**: Automatically fills in the current year, author name, and project description.
 - **Smart Autodetection**: Automatically detects project metadata from Rust, Node.js, Python, PHP, C#, Java, and Flutter projects.
+- **Conditional Config**: Support for directory-based configuration overrides (like Git's `includeIf`).
 - **OSI Safety**: Filter for OSI-approved licenses by default to ensure legal compliance.
 - **SPDX Integration**: Uses the official SPDX license list for accurate and up-to-date license texts.
 - **Configuration**: Save your author name and email to avoid re-typing them.
@@ -115,6 +116,25 @@ By default, the tool only shows and allows OSI-approved licenses and ignores cus
 # Search all licenses including non-OSI ones
 license list --ignore-osi-approved
 ```
+
+### Conditional Configuration
+
+Just like Git, you can override your author name and email based on the directory you are working in. This is perfect for separating work and personal projects.
+
+Open your config file (`license config path`) and add an `[include_if]` block:
+
+```toml
+author_name = "Personal Name"
+author_email = "personal@example.com"
+
+[include_if."dir:~/work/"]
+author_name = "Work Name"
+author_email = "work@company.com"
+```
+
+- **Prefix matching**: The override applies if your current directory starts with the specified path.
+- **Home expansion**: `~/` is automatically expanded to your home directory.
+- **Priority**: If multiple conditions match, the last one defined in the file wins.
 
 ### Custom Templates
 
