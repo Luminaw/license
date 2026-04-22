@@ -103,6 +103,24 @@ View detailed information:
 license info mit
 ```
 
+### Shell Completions
+
+Generate completion scripts for your favorite shell:
+
+```bash
+# Bash
+license completions bash > /etc/bash_completion.d/license
+
+# Zsh
+license completions zsh > /usr/local/share/zsh/site-functions/_license
+
+# Fish
+license completions fish > ~/.config/fish/completions/license.fish
+
+# PowerShell
+license completions powershell > license.ps1
+```
+
 ## CI/CD
 
 This project uses GitHub Actions for:

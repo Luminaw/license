@@ -2,7 +2,7 @@ mod config;
 mod project;
 
 use anyhow::Context;
-use clap::{Parser, Subcommand};
+use clap::{CommandFactory, Parser, Subcommand};
 use config::Config;
 use std::fs;
 
@@ -73,6 +73,11 @@ enum Commands {
     Info {
         /// The SPDX identifier of the license (e.g., MIT).
         id: String,
+    },
+    /// Generate shell completion scripts.
+    Completions {
+        /// The shell to generate completions for (bash, zsh, fish, powershell, elvish).
+        shell: clap_complete::Shell,
     },
 }
 
@@ -267,6 +272,11 @@ fn main() -> anyhow::Result<()> {
                     ERROR, id, RESET
                 );
             }
+        }
+        Commands::Completions { shell } => {
+            let mut cmd = Cli::command();
+            let name = cmd.get_name().to_string();
+            clap_complete::generate(shell, &mut cmd, name, &mut std::io::stdout());
         }
     }
 
