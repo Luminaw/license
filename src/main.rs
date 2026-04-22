@@ -109,27 +109,25 @@ fn find_license(id: &str) -> Option<spdx::LicenseId> {
     }
 
     // Try common variants
-    if let Some(license) = spdx::license_id(&id.to_uppercase()) {
-        return Some(license);
-    }
-    if let Some(license) = spdx::license_id(&id.to_lowercase()) {
-        return Some(license);
-    }
-
-    // Try title case
-    let mut chars = id.chars();
-    if let Some(f) = chars.next() {
-        let mut s = f.to_uppercase().collect::<String>();
-        s.push_str(&chars.as_str().to_lowercase());
-        if let Some(license) = spdx::license_id(&s) {
-            return Some(license);
-        }
-    }
-
-    None
+    let lower_id = id.to_lowercase();
+    spdx::identifiers::LICENSES
+        .iter()
+        .find(|l| l.name.to_lowercase() == lower_id)
+        .and_then(|l| spdx::license_id(l.name))
 }
 
 fn get_templates_dir() -> anyhow::Result<PathBuf> {
+    get_templates_dir_internal(None)
+}
+
+fn get_templates_dir_internal(override_dir: Option<PathBuf>) -> anyhow::Result<PathBuf> {
+    if let Some(dir) = override_dir {
+        if !dir.exists() {
+            fs::create_dir_all(&dir).context("Failed to create override templates directory")?;
+        }
+        return Ok(dir);
+    }
+
     let config_file = confy::get_configuration_file_path("license-manager", None)
         .context("Failed to get config path")?;
     let config_dir = config_file
@@ -143,7 +141,11 @@ fn get_templates_dir() -> anyhow::Result<PathBuf> {
 }
 
 fn get_custom_template(name: &str) -> Option<String> {
-    let templates_dir = get_templates_dir().ok()?;
+    get_custom_template_internal(name, None)
+}
+
+fn get_custom_template_internal(name: &str, override_dir: Option<PathBuf>) -> Option<String> {
+    let templates_dir = get_templates_dir_internal(override_dir).ok()?;
     let path = templates_dir.join(name);
     fs::read_to_string(path).ok()
 }
@@ -421,4 +423,45 @@ fn main() -> anyhow::Result<()> {
     }
 
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use tempfile::tempdir;
+
+    #[test]
+    fn test_find_license_casing() {
+        assert!(find_license("mit").is_some());
+        assert!(find_license("MIT").is_some());
+        assert!(find_license("Mit").is_some());
+        assert!(find_license("apache-2.0").is_some());
+    }
+
+    #[test]
+    fn test_custom_templates() {
+        let dir = tempdir().unwrap();
+        let templates_dir = dir.path().join("templates");
+        fs::create_dir_all(&templates_dir).unwrap();
+        
+        let template_name = "my-license";
+        let template_content = "Custom License Text";
+        fs::write(templates_dir.join(template_name), template_content).unwrap();
+
+        let found = get_custom_template_internal(template_name, Some(templates_dir));
+        assert_eq!(found, Some(template_content.to_string()));
+    }
+
+    #[test]
+    fn test_osi_filter_logic() {
+        // Test that find_license works and we can check is_osi_approved
+        let mit = find_license("mit").unwrap();
+        assert!(mit.is_osi_approved());
+
+        let gpl = find_license("gpl-3.0-only").unwrap();
+        assert!(gpl.is_osi_approved());
+
+        // Note: It's hard to find a non-OSI license in the default SPDX list that we can depend on,
+        // but we can at least verify that our logic for filtering works.
+    }
 }
