@@ -103,6 +103,20 @@ View detailed information:
 license info mit
 ```
 
+### Custom Templates
+
+You can register your own license templates (e.g., for internal company licenses):
+
+```bash
+# Register a template
+license create my-license ./path/to/my-license.txt
+
+# Use it
+license add my-license
+```
+
+Custom templates support the same auto-fill placeholders as standard licenses (`<year>`, `<owner>`, etc.).
+
 ### Shell Completions
 
 Generate completion scripts for your favorite shell:

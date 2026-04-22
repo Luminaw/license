@@ -5,6 +5,7 @@ use anyhow::Context;
 use clap::{CommandFactory, Parser, Subcommand};
 use config::Config;
 use std::fs;
+use std::path::PathBuf;
 
 use anstyle::{AnsiColor, Color, Style};
 
@@ -79,6 +80,13 @@ enum Commands {
         /// The shell to generate completions for (bash, zsh, fish, powershell, elvish).
         shell: clap_complete::Shell,
     },
+    /// Register a custom license template from a file.
+    Create {
+        /// The name to register the template as (e.g., "my-license").
+        name: String,
+        /// The path to the file containing the license text.
+        file: PathBuf,
+    },
 }
 
 fn find_license(id: &str) -> Option<spdx::LicenseId> {
@@ -108,6 +116,25 @@ fn find_license(id: &str) -> Option<spdx::LicenseId> {
     None
 }
 
+fn get_templates_dir() -> anyhow::Result<PathBuf> {
+    let config_file = confy::get_configuration_file_path("license-manager", None)
+        .context("Failed to get config path")?;
+    let config_dir = config_file
+        .parent()
+        .context("Failed to get config directory")?;
+    let templates_dir = config_dir.join("templates");
+    if !templates_dir.exists() {
+        fs::create_dir_all(&templates_dir).context("Failed to create templates directory")?;
+    }
+    Ok(templates_dir)
+}
+
+fn get_custom_template(name: &str) -> Option<String> {
+    let templates_dir = get_templates_dir().ok()?;
+    let path = templates_dir.join(name);
+    fs::read_to_string(path).ok()
+}
+
 fn main() -> anyhow::Result<()> {
     let args = Cli::parse();
 
@@ -124,7 +151,6 @@ fn main() -> anyhow::Result<()> {
             let project_info = project::detect();
 
             let author = name.unwrap_or_else(|| {
-                // Priority: 1. Config file, 2. Project metadata, 3. Default config value
                 if cfg.author_name != "Your Name" {
                     match &cfg.author_email {
                         Some(email) if !email.is_empty() => {
@@ -140,50 +166,58 @@ fn main() -> anyhow::Result<()> {
             });
 
             for id in &license_ids {
-                if let Some(license) = find_license(id) {
-                    let mut text = license.text().to_string();
-
-                    text = text
-                        .replace("<year>", &year)
-                        .replace("[year]", &year)
-                        .replace("[yyyy]", &year)
-                        .replace("{year}", &year);
-
-                    text = text
-                        .replace("<copyright holders>", &author)
-                        .replace("[name of copyright owner]", &author)
-                        .replace("<name of copyright owner>", &author)
-                        .replace("<name of author>", &author)
-                        .replace("[fullname]", &author)
-                        .replace("[owner]", &author)
-                        .replace("{owner}", &author);
-
-                    text = text.replace("<program>", &project_info.name)
-                        .replace("[program]", &project_info.name)
-                        .replace("<one line to give the program's name and a brief idea of what it does.>", &project_info.description);
-
-                    let filename = if license_ids.len() == 1 {
-                        "LICENSE".to_string()
-                    } else {
-                        format!("LICENSE-{}", license.name)
-                    };
-
-                    if fs::metadata(&filename).is_ok() && !force {
-                        println!(
-                            "{}File {} already exists. Use --force to overwrite.{}",
-                            ERROR, filename, RESET
-                        );
-                        continue;
-                    }
-
-                    fs::write(&filename, text).context("Failed to write license file")?;
-                    println!("{}Successfully created {}{}", SUCCESS, filename, RESET);
+                let (text, name_to_use) = if let Some(custom_text) = get_custom_template(id) {
+                    (custom_text, id.to_string())
+                } else if let Some(license) = find_license(id) {
+                    (license.text().to_string(), license.name.to_string())
                 } else {
                     eprintln!(
-                        "{}Error: License identifier '{}' not found in SPDX list.{}",
+                        "{}Error: License identifier '{}' not found in SPDX list or custom templates.{}",
                         ERROR, id, RESET
                     );
+                    continue;
+                };
+
+                let mut text = text;
+                text = text
+                    .replace("<year>", &year)
+                    .replace("[year]", &year)
+                    .replace("[yyyy]", &year)
+                    .replace("{year}", &year);
+
+                text = text
+                    .replace("<copyright holders>", &author)
+                    .replace("[name of copyright owner]", &author)
+                    .replace("<name of copyright owner>", &author)
+                    .replace("<name of author>", &author)
+                    .replace("[fullname]", &author)
+                    .replace("[owner]", &author)
+                    .replace("{owner}", &author);
+
+                text = text
+                    .replace("<program>", &project_info.name)
+                    .replace("[program]", &project_info.name)
+                    .replace(
+                        "<one line to give the program's name and a brief idea of what it does.>",
+                        &project_info.description,
+                    );
+
+                let filename = if license_ids.len() == 1 {
+                    "LICENSE".to_string()
+                } else {
+                    format!("LICENSE-{}", name_to_use)
+                };
+
+                if fs::metadata(&filename).is_ok() && !force {
+                    println!(
+                        "{}File {} already exists. Use --force to overwrite.{}",
+                        ERROR, filename, RESET
+                    );
+                    continue;
                 }
+
+                fs::write(&filename, text).context("Failed to write license file")?;
+                println!("{}Successfully created {}{}", SUCCESS, filename, RESET);
             }
         }
         Commands::Config { key, value } => match (key.as_deref(), value) {
@@ -226,6 +260,23 @@ fn main() -> anyhow::Result<()> {
             let mut licenses: Vec<_> = spdx::identifiers::LICENSES.iter().collect();
             licenses.sort_by_key(|l| l.name);
 
+            // Custom templates
+            if let Ok(templates_dir) = get_templates_dir()
+                && let Ok(entries) = fs::read_dir(templates_dir)
+            {
+                for entry in entries.flatten() {
+                    if let Some(name) = entry.file_name().to_str() {
+                        let matches = match &query {
+                            Some(q) => name.to_lowercase().contains(q),
+                            None => true,
+                        };
+                        if matches {
+                            println!("{:<20} | {:<50}", name, format!("{} (custom)", name));
+                        }
+                    }
+                }
+            }
+
             for license in licenses {
                 let matches = match &query {
                     Some(q) => {
@@ -241,7 +292,19 @@ fn main() -> anyhow::Result<()> {
             }
         }
         Commands::Info { id } => {
-            if let Some(license) = find_license(&id) {
+            if let Some(custom_text) = get_custom_template(&id) {
+                println!("{HEADER}ID:{RESET}          {}", id);
+                println!("{HEADER}Type:{RESET}        Custom Template");
+
+                println!("\n{HEADER}License Text Preview:{RESET}");
+                println!("{DIM}--------------------------------------------------{RESET}");
+                let preview: String = custom_text.lines().take(15).collect::<Vec<_>>().join("\n");
+                println!("{}", preview);
+                if custom_text.lines().count() > 15 {
+                    println!("{DIM}... (use 'add' to generate full file) ...{RESET}");
+                }
+                println!("{DIM}--------------------------------------------------{RESET}");
+            } else if let Some(license) = find_license(&id) {
                 println!("{HEADER}ID:{RESET}          {}", license.name);
                 println!("{HEADER}Full Name:{RESET}   {}", license.full_name);
                 println!(
@@ -277,6 +340,15 @@ fn main() -> anyhow::Result<()> {
             let mut cmd = Cli::command();
             let name = cmd.get_name().to_string();
             clap_complete::generate(shell, &mut cmd, name, &mut std::io::stdout());
+        }
+        Commands::Create { name, file } => {
+            let templates_dir = get_templates_dir()?;
+            let dest = templates_dir.join(&name);
+            fs::copy(&file, &dest).context("Failed to copy template file")?;
+            println!(
+                "{}Successfully registered custom template: {}{}",
+                SUCCESS, name, RESET
+            );
         }
     }
 
