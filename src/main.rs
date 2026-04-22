@@ -1,5 +1,6 @@
 mod config;
 
+use anyhow::Context;
 use clap::{Parser, Subcommand};
 use config::Config;
 use std::fs;
@@ -114,10 +115,10 @@ fn find_license(id: &str) -> Option<spdx::LicenseId> {
     None
 }
 
-fn main() {
+fn main() -> anyhow::Result<()> {
     let args = Cli::parse();
 
-    let mut cfg: Config = confy::load("license-manager", None).expect("Failed to load config");
+    let mut cfg: Config = confy::load("license-manager", None).context("Failed to load config")?;
 
     match args.command {
         Commands::Add {
@@ -178,7 +179,7 @@ fn main() {
                         continue;
                     }
 
-                    fs::write(&filename, text).expect("Failed to write license file");
+                    fs::write(&filename, text).context("Failed to write license file")?;
                     println!("{}Successfully created {}{}", SUCCESS, filename, RESET);
                 } else {
                     eprintln!(
@@ -195,7 +196,7 @@ fn main() {
             }
             (Some("path"), _) => {
                 let path = confy::get_configuration_file_path("license-manager", None)
-                    .expect("Failed to get config path");
+                    .context("Failed to get config path")?;
                 println!("{HEADER}Config file location:{RESET}");
                 println!("{}", path.display());
             }
@@ -204,7 +205,7 @@ fn main() {
             }
             (Some("name"), Some(v)) | (Some("author_name"), Some(v)) => {
                 cfg.author_name = v;
-                confy::store("license-manager", None, &cfg).expect("Failed to store config");
+                confy::store("license-manager", None, &cfg).context("Failed to store config")?;
                 println!("{}Updated author_name{}", SUCCESS, RESET);
             }
             (Some("email"), None) | (Some("author_email"), None) => {
@@ -212,12 +213,11 @@ fn main() {
             }
             (Some("email"), Some(v)) | (Some("author_email"), Some(v)) => {
                 cfg.author_email = Some(v);
-                confy::store("license-manager", None, &cfg).expect("Failed to store config");
+                confy::store("license-manager", None, &cfg).context("Failed to store config")?;
                 println!("{}Updated author_email{}", SUCCESS, RESET);
             }
             (Some(k), _) => {
-                eprintln!("{}Unknown config key: {}{}", ERROR, k, RESET);
-                std::process::exit(1);
+                anyhow::bail!("{}Unknown config key: {}{}", ERROR, k, RESET);
             }
         },
         Commands::List { query } => {
@@ -277,4 +277,6 @@ fn main() {
             }
         }
     }
+
+    Ok(())
 }
