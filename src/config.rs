@@ -43,12 +43,12 @@ impl Config {
 
         if let Ok(cwd) = std::env::current_dir() {
             let cwd_str = cwd.to_string_lossy();
-            
+
             for (condition, overrides) in &self.include_if {
                 if let Some(dir_pattern) = condition.strip_prefix("dir:") {
                     let expanded_pattern = expand_home(dir_pattern);
                     let pattern_path = Path::new(&expanded_pattern);
-                    
+
                     if cwd.starts_with(pattern_path) || cwd_str.starts_with(&expanded_pattern) {
                         if let Some(n) = &overrides.author_name {
                             name = n.clone();
@@ -107,10 +107,13 @@ mod tests {
         // This test depends on the current directory, so we match against current dir prefix
         if let Ok(cwd) = std::env::current_dir() {
             let cwd_str = cwd.to_string_lossy();
-            include_if.insert(format!("dir:{}", cwd_str), ConfigOverride {
-                author_name: Some("Override Name".into()),
-                author_email: Some("o@example.com".into()),
-            });
+            include_if.insert(
+                format!("dir:{}", cwd_str),
+                ConfigOverride {
+                    author_name: Some("Override Name".into()),
+                    author_email: Some("o@example.com".into()),
+                },
+            );
 
             let config = Config {
                 author_name: "Original".into(),
@@ -138,18 +141,21 @@ mod tests {
         let mut include_if = HashMap::new();
         if let Ok(cwd) = std::env::current_dir() {
             let cwd_str = cwd.to_string_lossy();
-            
+
             // First override
-            include_if.insert(format!("dir:{}", cwd_str), ConfigOverride {
-                author_name: Some("First Override".into()),
-                author_email: None,
-            });
-            
+            include_if.insert(
+                format!("dir:{}", cwd_str),
+                ConfigOverride {
+                    author_name: Some("First Override".into()),
+                    author_email: None,
+                },
+            );
+
             // Second override (same dir, but different key or same key - HashMap wins last)
             // Note: HashMap doesn't guarantee order, but in our logic we iterate.
             // If multiple keys match, they are applied in iteration order.
             // However, to test priority we can test prefix matching depth.
-            
+
             let config = Config {
                 author_name: "Original".into(),
                 author_email: None,
@@ -167,11 +173,14 @@ mod tests {
         if let Ok(cwd) = std::env::current_dir() {
             let parent = cwd.parent().unwrap_or(&cwd);
             let parent_str = parent.to_string_lossy();
-            
-            include_if.insert(format!("dir:{}", parent_str), ConfigOverride {
-                author_name: Some("Parent Match".into()),
-                author_email: None,
-            });
+
+            include_if.insert(
+                format!("dir:{}", parent_str),
+                ConfigOverride {
+                    author_name: Some("Parent Match".into()),
+                    author_email: None,
+                },
+            );
 
             let config = Config {
                 author_name: "Original".into(),

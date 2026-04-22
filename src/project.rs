@@ -193,7 +193,7 @@ pub fn detect_in(root: &Path) -> ProjectInfo {
                 let module_path = stripped.trim();
                 info.name = module_path
                     .split('/')
-                    .last()
+                    .next_back()
                     .unwrap_or(module_path)
                     .to_string();
                 return info;

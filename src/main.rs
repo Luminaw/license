@@ -443,7 +443,7 @@ mod tests {
         let dir = tempdir().unwrap();
         let templates_dir = dir.path().join("templates");
         fs::create_dir_all(&templates_dir).unwrap();
-        
+
         let template_name = "my-license";
         let template_content = "Custom License Text";
         fs::write(templates_dir.join(template_name), template_content).unwrap();
