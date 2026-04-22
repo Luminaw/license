@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+// Copyright (c) 2026 Luminaw
+
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::path::Path;
